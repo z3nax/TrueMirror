@@ -2,135 +2,451 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>iOS Mirror Camera with Permission Handling</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>LuxeMirror — Premium Vanity Mirror</title>
+    <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        body {
-            margin: 0;
-            padding: 0;
-            background-color: #000;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            color: white;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        :root {
+            --bg-color: #09090b;
+            --accent-color: #007aff;
+            --glass-bg: rgba(28, 28, 30, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --vanity-glow: #fffdf6; /* Soft warm white */
+            --frame-thickness: 0px;
         }
 
-        .camera-container {
-            position: relative;
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body, html {
             width: 100%;
-            max-width: 500px;
-            height: 80vh;
+            height: 100%;
             overflow: hidden;
-            border-radius: 20px;
-            background: #1c1c1e;
-            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+            background-color: var(--bg-color);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            user-select: none;
+        }
+
+        /* Ambient Vanity Lighting Frame Wrapper */
+        #app-wrapper {
+            width: 100%;
+            height: 100%;
             display: flex;
             justify-content: center;
             align-items: center;
+            transition: box-shadow 0.4s ease;
+            box-shadow: inset 0 0 0 var(--frame-thickness) var(--vanity-glow);
+        }
+
+        /* Viewport Container */
+        .mirror-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Video Feed & Transforms Layer */
+        .video-wrapper {
+            width: 100%;
+            height: 100%;
+            transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+            will-change: transform;
         }
 
         video {
             width: 100%;
             height: 100%;
             object-fit: cover;
-            transform: scaleX(-1);
+            /* Default: Mirrored View */
+            transform: scaleX(-1); 
             -webkit-transform: scaleX(-1);
-            display: none; /* Hidden until permission granted */
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
-        .overlay-ui {
+        /* True View State (Unflipped) */
+        video.true-view {
+            transform: scaleX(1);
+            -webkit-transform: scaleX(1);
+        }
+
+        /* Control Overlays */
+        .ui-layer {
             position: absolute;
-            text-align: center;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            pointer-events: none;
             padding: 20px;
             z-index: 10;
         }
 
-        button {
-            background-color: #007aff; /* iOS Blue */
+        /* Top Bar styling */
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            pointer-events: auto;
+        }
+
+        .brand {
+            color: #fff;
+            font-size: 18px;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.4);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Glassmorphism Controls Panel */
+        .bottom-panel {
+            width: 100%;
+            max-width: 440px;
+            margin: 0 auto;
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            pointer-events: auto;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+            transform: translateY(0);
+            transition: transform 0.3s ease;
+        }
+
+        /* Grid Action Buttons */
+        .button-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+        }
+
+        .btn {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            color: #fff;
+            border-radius: 16px;
+            padding: 14px 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .btn:active {
+            transform: scale(0.95);
+            background: rgba(255, 255, 255, 0.16);
+        }
+
+        .btn.active {
+            background: var(--accent-color);
+            border-color: transparent;
+            box-shadow: 0 0 15px rgba(0, 122, 255, 0.45);
+        }
+
+        /* Premium Zoom Slider Panel */
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            width: 100%;
+            padding: 0 4px;
+        }
+
+        .slider-icon {
+            color: #8e8e93;
+            flex-shrink: 0;
+        }
+
+        .zoom-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: rgba(255, 255, 255, 0.2);
+            outline: none;
+        }
+
+        .zoom-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: #ffffff;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+
+        .zoom-slider::-webkit-slider-thumb:active {
+            transform: scale(1.2);
+        }
+
+        /* Initial/Fallback Permission Modal */
+        .modal-overlay {
+            position: absolute;
+            inset: 0;
+            background: #09090b;
+            z-index: 100;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .modal-card {
+            max-width: 340px;
+            color: #fff;
+        }
+
+        .icon-pulse {
+            width: 64px;
+            height: 64px;
+            background: rgba(0, 122, 255, 0.1);
+            color: var(--accent-color);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 122, 255, 0.4); }
+            70% { transform: scale(1); box-shadow: 0 0 0 16px rgba(0, 122, 255, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 122, 255, 0); }
+        }
+
+        .modal-card h2 { font-size: 24px; margin-bottom: 10px; font-weight: 700; letter-spacing: -0.5px;}
+        .modal-card p { font-size: 15px; color: #8e8e93; margin-bottom: 24px; line-height: 1.4; }
+        
+        .primary-btn {
+            background: var(--accent-color);
             color: white;
             border: none;
-            padding: 12px 24px;
+            width: 100%;
+            padding: 16px;
             font-size: 16px;
             font-weight: 600;
-            border-radius: 10px;
+            border-radius: 14px;
             cursor: pointer;
             box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
-            transition: background-color 0.2s;
         }
 
-        button:active {
-            background-color: #0056b3;
-        }
-
-        .status-text {
-            margin-top: 15px;
-            font-size: 14px;
-            color: #aeaeb2;
-            line-height: 1.4;
-        }
+        /* Hide interface overlay logic for deep focus immersion */
+        .ui-hidden .bottom-panel { transform: translateY(150%); }
+        .ui-hidden .top-bar { opacity: 0; pointer-events: none; }
+        .top-bar { transition: opacity 0.3s ease; }
     </style>
 </head>
 <body>
 
-    <div class="camera-container">
-        <video id="webcam" autoplay playsinline muted></video>
-        
-        <div id="permissionUI" class="overlay-ui">
-            <button id="startBtn">Enable Camera</button>
-            <p id="statusMsg" class="status-text">This app requires camera access to show your reflection.</p>
+    <div id="app-wrapper">
+        <div class="mirror-container">
+            
+            <div id="videoContainer" class="video-wrapper">
+                <video id="mirrorFeed" autoplay playsinline muted></video>
+            </div>
+
+            <div class="ui-layer">
+                <div class="top-bar">
+                    <div class="brand">
+                        <i data-lucide="sparkles" style="color: gold; fill: gold;"></i> LuxeMirror
+                    </div>
+                </div>
+
+                <div class="bottom-panel" id="controlsPanel">
+                    <div class="slider-container">
+                        <i data-lucide="zoom-out" class="slider-icon" size="18"></i>
+                        <input type="range" id="zoomSlider" class="zoom-slider" min="1" max="3" step="0.01" value="1">
+                        <i data-lucide="zoom-in" class="slider-icon" size="18"></i>
+                    </div>
+
+                    <div class="button-grid">
+                        <button class="btn" id="toggleTrueView" title="Toggle Mirror Axis Orientation">
+                            <i data-lucide="flip-horizontal"></i>
+                            <span id="mirrorLabel">True View</span>
+                        </button>
+                        
+                        <button class="btn" id="toggleLight" title="Toggle Soft Light Vanity Border Edge">
+                            <i data-lucide="sun"></i>
+                            <span>Vanity Light</span>
+                        </button>
+
+                        <button class="btn" id="toggleFreeze" title="Freeze Stream Frames">
+                            <i data-lucide="camera-off" id="freezeIcon"></i>
+                            <span id="freezeLabel">Freeze</span>
+                        </button>
+
+                        <button class="btn" id="toggleFocus" title="Hide UI Controls">
+                            <i data-lucide="eye-off"></i>
+                            <span>Hide UI</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-overlay" id="setupGateway">
+                <div class="modal-card">
+                    <div class="icon-pulse">
+                        <i data-lucide="camera" size="32"></i>
+                    </div>
+                    <h2>Camera Access Required</h2>
+                    <p>To provide high-end vanity mirroring, this browser requires secure access to your front-facing camera device matrix.</p>
+                    <button class="primary-btn" id="actionConnect">Initialize Mirror</button>
+                </div>
+            </div>
+
         </div>
     </div>
 
     <script>
-        const video = document.getElementById('webcam');
-        const permissionUI = document.getElementById('permissionUI');
-        const startBtn = document.getElementById('startBtn');
-        const statusMsg = document.getElementById('statusMsg');
+        // DOM Node Architecture Identification
+        const appWrapper = document.getElementById('app-wrapper');
+        const videoContainer = document.getElementById('videoContainer');
+        const video = document.getElementById('mirrorFeed');
+        const setupGateway = document.getElementById('setupGateway');
+        
+        // Control Element Interactivity
+        const actionConnect = document.getElementById('actionConnect');
+        const zoomSlider = document.getElementById('zoomSlider');
+        const toggleTrueView = document.getElementById('toggleTrueView');
+        const toggleLight = document.getElementById('toggleLight');
+        const toggleFreeze = document.getElementById('toggleFreeze');
+        const toggleFocus = document.getElementById('toggleFocus');
+        
+        // Dynamic Labeling Elements
+        const mirrorLabel = document.getElementById('mirrorLabel');
+        const freezeLabel = document.getElementById('freezeLabel');
+        const freezeIcon = document.getElementById('freezeIcon');
 
-        async function requestCameraPermission() {
-            const constraints = {
-                video: {
-                    facingMode: 'user',
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 }
-                },
-                audio: false
-            };
+        // Engine State Variables
+        let activeStream = null;
+        let isTrueView = false;
+        let isLightOn = false;
+        let isFrozen = false;
 
-            statusMsg.innerText = "Requesting permission...";
+        // Device Constraints for Front Facing Camera Stream Matrix
+        const mediaConfig = {
+            video: {
+                facingMode: 'user',
+                width: { ideal: 1920 },
+                height: { ideal: 1080 }
+            },
+            audio: false
+        };
 
+        // Initialize Core Component Asset Libraries
+        lucide.createIcons();
+
+        // Gateway Camera Initialization Execution
+        async function runMirrorEngine() {
             try {
-                // This triggers the native iOS "Allow/Deny" popup
-                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                activeStream = await navigator.mediaDevices.getUserMedia(mediaConfig);
+                video.srcObject = activeStream;
                 
-                // If successful, attach stream and swap UI
-                video.srcObject = stream;
-                video.style.display = 'block';
-                permissionUI.style.display = 'none'; 
-                
-            } catch (err) {
-                console.error("Camera error:", err);
-                handlePermissionError(err);
+                // Hide Setup Portal smoothly upon verified hardware acquisition
+                setupGateway.style.transition = 'opacity 0.4s ease';
+                setupGateway.style.opacity = '0';
+                setTimeout(() => setupGateway.remove(), 400);
+            } catch (runtimeError) {
+                console.error("Critical Stream Intercept Failure: ", runtimeError);
+                alert("Could not access the front camera. Please verify your connection is secure (HTTPS) and that hardware runtime authorization has been explicitly assigned inside your system preferences panel.");
             }
         }
 
-        function handlePermissionError(error) {
-            // Check specifically for rejection or blockages
-            if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-                statusMsg.innerHTML = "❌ <strong>Camera Access Denied</strong>.<br><br>To fix this:<br>1. Tap the <strong>'aA'</strong> icon in Safari's address bar.<br>2. Tap <strong>Website Settings</strong>.<br>3. Change Camera to <strong>Allow</strong>, then refresh.";
-            } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
-                statusMsg.innerText = "❌ Front camera not found on this device.";
+        // Feature 1: Digital Smooth Scaling Interpolation Control (Zoom)
+        zoomSlider.addEventListener('input', (event) => {
+            const level = event.target.value;
+            videoContainer.style.transform = `scale(${level})`;
+        });
+
+        // Feature 2: Mirror Axis Inversion Inverter (True View vs Mirror View)
+        toggleTrueView.addEventListener('click', () => {
+            isTrueView = !isTrueView;
+            if (isTrueView) {
+                video.classList.add('true-view');
+                toggleTrueView.classList.add('active');
+                mirrorLabel.innerText = "Mirror View";
             } else {
-                statusMsg.innerText = "❌ Could not access camera. Please make sure you are using Safari on iOS.";
+                video.classList.remove('true-view');
+                toggleTrueView.classList.remove('active');
+                mirrorLabel.innerText = "True View";
             }
-            // Keep button visible so they can try again after changing settings
-            startBtn.innerText = "Try Again";
-        }
+        });
 
-        // iOS Safari strictly prefers media requests triggered by a direct user gesture (click/tap)
-        startBtn.addEventListener('click', requestCameraPermission);
+        // Feature 3: Exposure Matrix Illumination System (Vanity Ambient Frame)
+        toggleLight.addEventListener('click', () => {
+            isLightOn = !isLightOn;
+            if (isLightOn) {
+                document.documentElement.style.setProperty('--frame-thickness', '34px');
+                toggleLight.classList.add('active');
+            } else {
+                document.documentElement.style.setProperty('--frame-thickness', '0px');
+                toggleLight.classList.remove('active');
+            }
+        });
+
+        // Feature 4: High-Performance Hardware Stream Pause Mechanism (Freeze Frame)
+        toggleFreeze.addEventListener('click', () => {
+            if (!activeStream) return;
+            
+            isFrozen = !isFrozen;
+            if (isFrozen) {
+                video.pause();
+                toggleFreeze.classList.add('active');
+                freezeLabel.innerText = "Unfreeze";
+                freezeIcon.setAttribute('data-lucide', 'camera');
+            } else {
+                video.play();
+                toggleFreeze.classList.remove('active');
+                freezeLabel.innerText = "Freeze";
+                freezeIcon.setAttribute('data-lucide', 'camera-off');
+            }
+            lucide.createIcons(); // Re-render modern SVG dynamic icon changes
+        });
+
+        // Feature 5: Immersive UX Deep Focus Management (Hide / Unhide Interface Controls)
+        toggleFocus.addEventListener('click', () => {
+            document.body.classList.add('ui-hidden');
+        });
+
+        // Tap Anywhere to Restore Dashboard interface ruleset
+        document.body.addEventListener('click', (e) => {
+            if (document.body.classList.contains('ui-hidden')) {
+                // Ensure clicks to register un-hide events occur externally to control cards
+                if (!e.target.closest('#controlsPanel')) {
+                    document.body.classList.remove('ui-hidden');
+                }
+            }
+        });
+
+        // Activation Event Hookup
+        actionConnect.addEventListener('click', runMirrorEngine);
     </script>
 </body>
 </html>
